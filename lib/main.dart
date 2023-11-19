@@ -346,6 +346,12 @@ class TablaPaciente extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Ordenar la lista de datos por fecha de forma ascendente (de más viejos a más nuevos)
+    List<List<dynamic>> sortedData = List.from(data);
+    DateTime fecha = DateTime.now();
+    sortedData.add([4800, 73, fecha]);
+    sortedData.sort((a, b) => (a[2] as DateTime).compareTo(b[2] as DateTime));
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.green,
@@ -373,7 +379,7 @@ class TablaPaciente extends StatelessWidget {
                 DataColumn(label: Text('Peso (g)')),
                 DataColumn(label: Text('Estatura (cm)')),
               ],
-              source: _DataSource(data),
+              source: _DataSource(sortedData),
               rowsPerPage: 7, // Puedes ajustar la cantidad de filas por página
             ),
             const SizedBox(height: 20),
@@ -382,7 +388,7 @@ class TablaPaciente extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => GraficoPaciente(data),
+                    builder: (context) => GraficoPaciente(sortedData),
                   ),
                 );
               },
@@ -395,13 +401,49 @@ class TablaPaciente extends StatelessWidget {
   }
 }
 
-class GraficoPaciente extends StatelessWidget {
+class GraficoPaciente extends StatefulWidget {
   final List<List<dynamic>> data;
 
   const GraficoPaciente(this.data);
 
   @override
+  _GraficoPacienteState createState() => _GraficoPacienteState();
+}
+
+class _GraficoPacienteState extends State<GraficoPaciente> {
+  bool comparacionActivada = false;
+  final List<List<dynamic>> datosComparacion = [
+    [3400, 50, DateTime(2023, 6, 19)],
+    [5900, 60, DateTime(2023, 9, 19)],
+    [7700, 66, DateTime(2023, 12, 19)],
+    [9000, 71, DateTime(2024, 3, 19)],
+    [9900, 75, DateTime(2024, 6, 19)],
+    [11000, 78, DateTime(2024, 9, 19)],
+    [11600, 81, DateTime(2024, 12, 19)]
+  ];
+
+  @override
   Widget build(BuildContext context) {
+    // Obtener el valor mínimo y máximo del primer elemento en el arreglo de arreglos data
+    double valorMinimoPeso = double.infinity;
+    double valorMinimoEstatura = double.infinity;
+    double valorMaximoPeso = -double.infinity;
+    double valorMaximoEstatura = -double.infinity;
+
+    DateTime fechaDeNacimiento = DateTime(2023, 6, 19);
+
+    List<List<dynamic>> datosActuales = widget.data;
+
+    for (var entry in datosComparacion) {
+      double primerValor = double.tryParse(entry[0].toString()) ?? 0.0;
+      valorMinimoPeso = primerValor < valorMinimoPeso ? primerValor : valorMinimoPeso;
+      valorMaximoPeso = primerValor > valorMaximoPeso ? primerValor : valorMaximoPeso;
+
+      double segundoValor = double.tryParse(entry[1].toString()) ?? 0.0;
+      valorMinimoEstatura = segundoValor < valorMinimoEstatura ? segundoValor : valorMinimoEstatura;
+      valorMaximoEstatura = segundoValor > valorMaximoEstatura ? segundoValor : valorMaximoEstatura;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gráfico del Paciente'),
@@ -409,54 +451,194 @@ class GraficoPaciente extends StatelessWidget {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: LineChart(
-          LineChartData(
-            gridData: FlGridData(show: false),
-            titlesData: FlTitlesData(
-              leftTitles: SideTitles(showTitles: true),
-              bottomTitles: SideTitles(
-                showTitles: true,
-                getTitles: (value) {
-                  final index = value.toInt();
-                  if (index >= 0 && index < data.length) {
-                    final date =
-                        DateFormat('dd/MM').format(data[index][2] as DateTime);
-                    return date;
-                  }
-                  return '';
-                },
-              ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('Comparar con datos preestablecidos'),
+                Switch(
+                  value: comparacionActivada,
+                  onChanged: (value) {
+                    setState(() {
+                      comparacionActivada = value;
+                    });
+                  },
+                ),
+              ],
             ),
-            borderData: FlBorderData(
-              show: true,
-              border: Border.all(
-                color: const Color(0xff37434d),
-                width: 1,
-              ),
-            ),
-            minX: 0,
-            maxX: data.length.toDouble() - 1,
-            minY: 0,
-            maxY: 5000, // Ajusta el valor máximo según tus datos
-            lineBarsData: [
-              LineChartBarData(
-                spots: data
-                    .asMap()
-                    .entries
-                    .map(
-                      (entry) => FlSpot(
-                        entry.key.toDouble(),
-                        entry.value[0] as double,
+            Expanded(
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(show: true),
+                  titlesData: FlTitlesData(
+                    leftTitles: SideTitles(
+                      showTitles: true,
+                      interval: (valorMaximoPeso - valorMinimoPeso),
+                    ),
+                    rightTitles: SideTitles(showTitles: false),
+                    bottomTitles: SideTitles(
+                      showTitles: true,
+                      interval: (datosActuales.length / 7).ceil().toDouble(),
+                      getTitles: (value) {
+                        final index = value.round();
+                        if (index >= 0 && index < datosActuales.length) {
+                          final fechaDato = datosActuales[index][2] as DateTime;
+                          int edadEnMeses = (fechaDato.year - fechaDeNacimiento.year) * 12 +
+                              fechaDato.month - fechaDeNacimiento.month;
+                          return '$edadEnMeses';
+                        }
+                        return '';
+                      },
+                    ),
+                    topTitles: SideTitles(
+                        showTitles: true,
+                        interval: datosActuales.length.toDouble() / 2,
+                        getTitles: (value) {
+                          final index = value.round();
+                          if (index == 1) {return '';}
+                          if (index > 1) {return 'Peso (g) // Edad (meses)';}
+                          return '';
+                        }
+                    ),
+                  ),
+                  borderData: FlBorderData(
+                    show: true,
+                    border: Border.all(
+                      color: const Color(0xff37434d),
+                      width: 1,
+                    ),
+                  ),
+                  minX: 0,
+                  maxX: datosActuales.length.toDouble() - 1,
+                  minY: valorMinimoPeso - 1000, // Resta 1000 para espacio adicional en minY
+                  maxY: valorMaximoPeso + 1000, // Añade 1000 para espacio adicional en maxY
+                  lineBarsData: [
+                    // Serie de datos actuales
+                    LineChartBarData(
+                      spots: datosActuales
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => FlSpot(
+                          entry.key.toDouble(),
+                          double.tryParse(entry.value[0].toString()) ?? 0.0,
+                        ),
+                      )
+                          .toList(),
+                      isCurved: true,
+                      colors: const [Colors.blue],
+                      dotData: FlDotData(show: true),
+                      belowBarData: BarAreaData(show: false),
+                    ),
+                    // Serie de datos de comparación
+                    if (comparacionActivada)
+                      LineChartBarData(
+                        spots: datosComparacion
+                            .asMap()
+                            .entries
+                            .map(
+                              (entry) => FlSpot(
+                            entry.key.toDouble(),
+                            double.tryParse(entry.value[0].toString()) ?? 0.0,
+                          ),
+                        )
+                            .toList(),
+                        isCurved: true,
+                        colors: const [Colors.red], // Puedes cambiar el color
+                        dotData: FlDotData(show: true),
+                        belowBarData: BarAreaData(show: false),
                       ),
-                    )
-                    .toList(),
-                isCurved: true,
-                colors: const [Colors.blue],
-                dotData: FlDotData(show: false),
-                belowBarData: BarAreaData(show: false),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16), // Espacio entre los gráficos
+            Expanded(
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(show: true),
+                  titlesData: FlTitlesData(
+                    leftTitles: SideTitles(
+                      showTitles: true,
+                      interval: (valorMaximoEstatura - valorMinimoEstatura),
+                    ),
+                    rightTitles: SideTitles(showTitles: false),
+                    bottomTitles: SideTitles(
+                      showTitles: true,
+                      interval: (datosActuales.length / 7).ceil().toDouble(),
+                      getTitles: (value) {
+                        final index = value.round();
+                        if (index >= 0 && index < datosActuales.length) {
+                          final fechaDato = datosActuales[index][2] as DateTime;
+                          int edadEnMeses = (fechaDato.year - fechaDeNacimiento.year) * 12 +
+                              fechaDato.month - fechaDeNacimiento.month;
+                          return '$edadEnMeses';
+                        }
+                        return '';
+                      },
+                    ),
+                    topTitles: SideTitles(
+                        showTitles: true,
+                        interval: datosActuales.length.toDouble() / 2,
+                        getTitles: (value) {
+                          final index = value.round();
+                          if (index == 1) {return '';}
+                          if (index > 1) {return 'Estatura (cm) // Edad (meses)';}
+                          return '';
+                        }
+                    ),
+                  ),
+                  borderData: FlBorderData(
+                    show: true,
+                    border: Border.all(
+                      color: const Color(0xff37434d),
+                      width: 1,
+                    ),
+                  ),
+                  minX: 0,
+                  maxX: datosActuales.length.toDouble() - 1,
+                  minY: valorMinimoEstatura - 10, // Resta 1000 para espacio adicional en minY
+                  maxY: valorMaximoEstatura + 10, // Añade 1000 para espacio adicional en maxY
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: datosActuales
+                          .asMap()
+                          .entries
+                          .map(
+                            (entry) => FlSpot(
+                          entry.key.toDouble(),
+                          double.tryParse(entry.value[1].toString()) ?? 0.0,
+                        ),
+                      )
+                          .toList(),
+                      isCurved: true,
+                      colors: const [Colors.blue],
+                      dotData: FlDotData(show: true),
+                      belowBarData: BarAreaData(show: false),
+                    ),
+                    if (comparacionActivada)
+                      LineChartBarData(
+                        spots: datosComparacion
+                            .asMap()
+                            .entries
+                            .map(
+                              (entry) => FlSpot(
+                            entry.key.toDouble(),
+                            double.tryParse(entry.value[1].toString()) ?? 0.0,
+                          ),
+                        )
+                            .toList(),
+                        isCurved: true,
+                        colors: const [Colors.red], // Puedes cambiar el color
+                        dotData: FlDotData(show: true),
+                        belowBarData: BarAreaData(show: false),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
